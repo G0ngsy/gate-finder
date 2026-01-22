@@ -5,6 +5,7 @@ import os
 import json
 import requests
 from dotenv import load_dotenv
+from PIL import Image, ImageDraw
 
 # ==========================================
 # 1. 초기 설정 및 API 키 로드
@@ -164,12 +165,58 @@ if 'flight_info' in st.session_state:
                 st.error(f"연결 오류 발생: {e}")
 
 # ==========================================
-# 4. 3단계: 지도 시각화 (좌표 매핑 예정)
+# 4. 3단계: 지도 시각화 및 경로 안내
 # ==========================================
 if 'real_data' in st.session_state:
     st.divider()
-    st.subheader("📍 게이트 위치 안내")
-    st.write(f"현재 비행기는 **{st.session_state['real_data']['terminal']} {st.session_state['real_data']['gate']}번 게이트**에 있습니다.")
     
-    # 맵 시각화 로직이 들어갈 자리
-    st.info("준비 중: 공항 평면도 위에 게이트 위치를 핀으로 표시하는 기능이 추가될 예정입니다.")
+    # 데이터 준비
+    res = st.session_state['real_data']
+    gate_no = res['gate']
+    terminal_name = res['terminal']
+    t_key = "t2" if "제2" in terminal_name else "t1"
+    map_path = f"assets/map_{t_key}.png" # 저장하신 파일명에 맞게 수정
+
+    # 1. 상단 안내 텍스트 표시
+    st.markdown(f"### 📍 {terminal_name} **{gate_no}번 게이트**로 가세요.")
+    st.info("💡 보안검색대를 통과한 후 아래 경로를 따라 이동하세요.")
+
+    if os.path.exists(map_path):
+        img = Image.open(map_path).convert("RGB")
+        draw = ImageDraw.Draw(img)
+
+        # 2. 좌표 설정 (테스트용 가상 좌표 - 실제 이미지에 맞춰 수정 필요)
+        # 출발점(보안검색대 부근) -> 목적지(게이트)
+        start_pos = (500, 500) # 이미지의 중앙 하단(보안검색대) 가정
+        
+        # 게이트별 좌표 데이터베이스 (샘플)
+        GATE_COORDS = {
+            "26": (585, 235),
+            "15": (400, 300),
+            "230": (150, 450)
+        }
+        end_pos = GATE_COORDS.get(gate_no, (300, 300)) # 없으면 기본값
+
+        # 3. 경로 화살표 그리기
+        # 선 그리기
+        draw.line([start_pos, end_pos], fill="#FF4B4B", width=8)
+        # 화살표 촉(삼각형) 그리기
+        draw.polygon([end_pos, (end_pos[0]-15, end_pos[1]+30), (end_pos[0]+15, end_pos[1]+30)], fill="#FF4B4B")
+        # 목적지 핀 그리기
+        radius = 15
+        draw.ellipse((end_pos[0]-radius, end_pos[1]-radius, end_pos[0]+radius, end_pos[1]+radius), fill="white", outline="#FF4B4B", width=5)
+
+        # 지도 출력
+        st.image(img, caption=f"{terminal_name} {gate_no}번 게이트 경로 가이드", use_container_width=True)
+    
+    else:
+        st.warning("지도를 불러올 수 없습니다. assets 폴더의 파일명을 확인해주세요.")
+
+    # 4. 상세 링크 버튼 추가 (인천공항 공식 맵)
+    st.markdown("---")
+    st.write("🏃‍♂️ **더 자세한 길안내가 필요하신가요?**")
+    
+    # 버튼 형식으로 공식 사이트 연결
+    official_map_url = "https://www.airport.kr/geomap/ap_ko/view.do#/search"
+    st.link_button(f"인천공항 공식 맵에서 {gate_no}번 게이트 찾기 🧭", official_map_url, use_container_width=True)
+    st.caption("※ 공식 맵 사이트에서 게이트 번호를 검색하시면 현재 위치 기준 실시간 길찾기가 가능합니다.")
